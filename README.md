@@ -18,6 +18,14 @@ A Rust application for generating polygonal fiducial markers optimized for photo
 - **Performance Optimized**: Parallel processing, async rendering, and efficient regeneration for smooth interaction
 - **Responsive Interface**: Real-time regeneration when resizing panels for optimal viewing
 
+## Use Cases
+
+- **3D Scanning**: Fiducial markers for photogrammetry and structured light scanning
+- **Robotics**: Visual landmarks for SLAM and navigation
+- **Augmented Reality**: Tracking markers for AR applications
+- **Computer Vision Research**: Standardized test patterns
+
+
 ## Quick Start
 
 ### Option 1: Download Pre-built Binary (Recommended)
@@ -146,13 +154,6 @@ Key parameters can be adjusted in the GUI:
 - 6-sided polygons: Up to ~36 tags possible
 
 *(Actual limits depend on color distinctness requirements)*
-
-## Use Cases
-
-- **3D Scanning**: Fiducial markers for photogrammetry and structured light scanning
-- **Robotics**: Visual landmarks for SLAM and navigation
-- **Augmented Reality**: Tracking markers for AR applications
-- **Computer Vision Research**: Standardized test patterns
 
 ## Technical Architecture
 
