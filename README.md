@@ -4,6 +4,11 @@ A Rust application for generating polygonal fiducial markers optimized for photo
 
 ![Fiducial Markers](https://img.shields.io/badge/markers-polygonal-blue) ![Language](https://img.shields.io/badge/language-Rust-orange) ![GUI](https://img.shields.io/badge/GUI-egui-green)
 
+
+<img width="1006" height="648" alt="image" src="https://github.com/user-attachments/assets/fa87b147-154d-4413-82b0-b66cfa40f483" />
+
+
+
 ## Features
 
 - **Advanced Color Selection**: Uses CIE Lab color space and ΔE calculations to ensure maximum visual distinction between colors and calculates the maximum number of tags possible based on available distinct colors
@@ -194,6 +199,9 @@ Self-similar tags, especially when arranged in a repeating pattern, increase the
 
 ## ‘Poly Cues’ Polychromatic Polygons
 Conventionally, fiducial tags are black and white to maximize contrast. Since we use a color camera, one easy way to make otherwise identical tags visually unique is to simply make them different colors. Polycues are generated using a set of unique colors picked from a colorspace to maximize ΔE (perceptual color difference metric). These tags consist of a regular polygon, divided into slices radially. Each slice is a different color. In the center is a smooth Gaussian dot. This design contains the benefits of a SIFTtag, plus rotational asymmetry, tag to tag differentiability, and sharp edges and junctions for precision pose estimation.
+
+<img width="1009" height="965" alt="image" src="https://github.com/user-attachments/assets/bd1c9836-684d-46b1-a9c2-52b92cbf4b1f" />
+
 
 ## Number of sides
 The choice of sides has two confounding constraints. A smaller number of divisions means each is larger, and will more easily survive the DoG and camera defocus.
