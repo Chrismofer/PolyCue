@@ -2,7 +2,6 @@
 
 A Rust application for generating polygonal fiducial markers optimized for photogrammetry and computer vision applications.
 
-![Fiducial Markers](https://img.shields.io/badge/markers-polygonal-blue) ![Language](https://img.shields.io/badge/language-Rust-orange) ![GUI](https://img.shields.io/badge/GUI-egui-green)
 
 
 <img width="1006" height="648" alt="image" src="https://github.com/user-attachments/assets/fa87b147-154d-4413-82b0-b66cfa40f483" />
@@ -12,7 +11,8 @@ A Rust application for generating polygonal fiducial markers optimized for photo
 ## Features
 
 - **Advanced Color Selection**: Uses CIE Lab color space and ΔE calculations to ensure maximum visual distinction between colors and calculates the maximum number of tags possible based on available distinct colors
-- **Optimized Color Grouping**: Monte Carlo optimization algorithm arranges colors for optimal contrast between adjacent segments
+- **Optimized Color Grouping**: Monte Carlo optimization algorithm arranges colors for optimal contrast between adjacent segments<img width="1843" height="1152" alt="image" src="https://github.com/user-attachments/assets/fdc40e75-ae7f-4ca2-8a35-add819f21eeb" />
+
 - **High-Resolution Output**
 - **Multiple Polygon Types**: Support for 3-6 sided markers (triangular, square, pentagonal, hexagonal)
 - **Customizable Features**: Optional center dot and gradient dot with adjustable sizes
