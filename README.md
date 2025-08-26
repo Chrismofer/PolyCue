@@ -7,6 +7,7 @@ A Rust application for generating polygonal fiducial markers optimized for photo
 
 ## Features
 
+- **Optimized tags for Structure-from-Motion feature detectors**: tags that are differentiable, rotationally asymetrical, and include a diffuse gaussian dot as well as sharp edges, corners and junctions.
 - **Advanced Color Selection**: Uses CIE Lab color space and ΔE calculations to ensure maximum visual distinction between colors and calculates the maximum number of tags possible based on available distinct colors
 - **Optimized Color Grouping**: Monte Carlo optimization algorithm arranges colors for optimal contrast between adjacent segments
 
