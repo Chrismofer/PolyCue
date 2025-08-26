@@ -1,0 +1,32 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Generated output (comment out the line below if you want to include sample output)
+/output/
+
+# Sample output is included for demonstration
+# /sample_output/
+
+# Build scripts shouldn't exclude the .bat file
+# build-windows.bat should be included
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

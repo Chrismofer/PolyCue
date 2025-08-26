@@ -1,0 +1,163 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: polycue.exe
+            asset_name: polycue-windows-x64.exe
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: polycue
+            asset_name: polycue-linux-x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: polycue
+            asset_name: polycue-macos-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+        profile: minimal
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install Linux dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+
+    - name: Build project
+      run: cargo build --release --target ${{ matrix.target }}
+
+    - name: Run tests
+      run: cargo test --release --target ${{ matrix.target }}
+
+    - name: Prepare artifact (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: pwsh
+      run: |
+        $sourcePath = "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}"
+        $destPath = "${{ matrix.asset_name }}"
+        Copy-Item $sourcePath $destPath
+        
+        # Create a zip package with the executable and sample output
+        New-Item -ItemType Directory -Force -Path "package"
+        Copy-Item $destPath "package/"
+        Copy-Item "README.md" "package/"
+        Copy-Item "LICENSE" "package/"
+        if (Test-Path "output") {
+          Copy-Item -Recurse "output" "package/"
+        }
+        Compress-Archive -Path "package/*" -DestinationPath "polycue-windows-x64.zip"
+
+    - name: Prepare artifact (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+        chmod +x ${{ matrix.asset_name }}
+        
+        # Create a tar.gz package
+        mkdir -p package
+        cp ${{ matrix.asset_name }} package/
+        cp README.md package/
+        cp LICENSE package/
+        if [ -d "output" ]; then
+          cp -r output package/
+        fi
+        tar -czf ${{ matrix.asset_name }}.tar.gz -C package .
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.asset_name }}
+        path: |
+          ${{ matrix.asset_name }}*
+          *.zip
+          *.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          **/polycue-*
+        body: |
+          ## PolyCue ${{ github.ref_name }}
+          
+          Pre-compiled binaries for Windows, Linux, and macOS.
+          
+          ### Installation
+          
+          **Windows:**
+          1. Download `polycue-windows-x64.zip`
+          2. Extract the zip file
+          3. Run `polycue-windows-x64.exe`
+          
+          **Linux:**
+          1. Download `polycue-linux-x64.tar.gz`
+          2. Extract: `tar -xzf polycue-linux-x64.tar.gz`
+          3. Run: `./polycue-linux-x64`
+          
+          **macOS:**
+          1. Download `polycue-macos-x64.tar.gz`
+          2. Extract: `tar -xzf polycue-macos-x64.tar.gz`
+          3. Run: `./polycue-macos-x64`
+          
+          ### Changes
+          
+          See [CHANGELOG.md](CHANGELOG.md) for detailed changes.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
