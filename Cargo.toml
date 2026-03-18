@@ -1,6 +1,6 @@
 [package]
 name = "polycue"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "A Rust application for generating polygonal fiducial markers optimized for photogrammetry and computer vision"
 license = "MIT"
@@ -8,6 +8,7 @@ repository = "https://github.com/Chrismofer/PolyCue"
 authors = ["Chrismofer"]
 keywords = ["fiducial", "markers", "computer-vision", "photogrammetry", "3d-scanning"]
 categories = ["graphics", "visualization", "computer-vision"]
+build = "build.rs"
 
 [dependencies]
 image = "0.25"
@@ -18,8 +19,12 @@ serde_json = "1"
 eframe = { version = "0.27", default-features = true, features = ["wgpu"] }
 rayon = "1.10"
 chrono = { version = "0.4", features = ["serde"] }
+ab_glyph = "0.2"
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
+
+[build-dependencies]
+winres = "0.1"

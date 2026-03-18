@@ -30,20 +30,20 @@ impl SliderConfig {
     
     // Center Dot Size Slider (percentage)
     pub const CENTER_DOT_MIN: f32 = 1.0;
-    pub const CENTER_DOT_MAX: f32 = 50.0;
+    pub const CENTER_DOT_MAX: f32 = 100.0;
     pub const CENTER_DOT_STEP: f64 = 1.0;
     pub const CENTER_DOT_DEFAULT: f32 = 35.0;
     
     // Gradient Dot Size Slider (percentage)
     pub const GRADIENT_DOT_MIN: f32 = 1.0;
-    pub const GRADIENT_DOT_MAX: f32 = 50.0;
+    pub const GRADIENT_DOT_MAX: f32 = 100.0;
     pub const GRADIENT_DOT_STEP: f64 = 1.0;
     pub const GRADIENT_DOT_DEFAULT: f32 = 35.0;
     
     // Tag Resolution Slider
     pub const RESOLUTION_MIN: f32 = 2.0;
     pub const RESOLUTION_MAX: f32 = 2000.0;
-    pub const RESOLUTION_DEFAULT: u32 = 1000;
+    pub const RESOLUTION_DEFAULT: u32 = 300;
     
     // Grid Columns Slider
     pub const COLUMNS_MIN: i32 = 1;
@@ -53,11 +53,19 @@ impl SliderConfig {
     // Other Default Values
     pub const THRESHOLD_DEFAULT: f32 = 28.0;
     pub const SAVE_SIZE_DEFAULT: (u32, u32) = (1600, 1600);
+    pub const SAVE_SIZE_MIN: u32 = 2;
+    pub const SAVE_SIZE_MAX: u32 = 8192;
     pub const TILE_WIDTH_DEFAULT: f32 = 256.0;
     pub const CENTER_DOT_ENABLED_DEFAULT: bool = true;
     pub const GRADIENT_DOT_ENABLED_DEFAULT: bool = true;
     pub const PROFILING_DEFAULT: bool = true;
     pub const DEFER_HIGH_RES_DEFAULT: bool = true;
+
+    // Serial number overlay
+    pub const SERIAL_NUMBERS_DEFAULT: bool = false;
+    pub const SERIAL_H_ALIGN_DEFAULT: f32 = 0.9;
+    pub const SERIAL_V_ALIGN_DEFAULT: f32 = 0.82;
+    pub const SERIAL_BORDER_DEFAULT: bool = true;
 }
 
 // ============================================================================
@@ -111,6 +119,16 @@ pub struct AppState {
     // If true, skip high-res render on interactive changes; only render on Save
     pub defer_high_res: bool,
     
+    // Background color for tag rendering
+    pub bg_color: egui::Color32,
+
+    // Serial number overlay
+    pub serial_numbers: bool,
+    pub serial_h_align: f32,
+    pub serial_v_align: f32,
+    pub serial_color: egui::Color32,
+    pub serial_border: bool,
+
     // Async blur job
     pub blur_job_id: u64,
     pub blurred_rx: Option<mpsc::Receiver<(u64, usize, image::RgbaImage)>>,
@@ -144,6 +162,12 @@ impl AppState {
             last_panel_width: 800.0, // default width
             profiling: SliderConfig::PROFILING_DEFAULT,
             defer_high_res: SliderConfig::DEFER_HIGH_RES_DEFAULT,
+            bg_color: egui::Color32::WHITE,
+            serial_numbers: SliderConfig::SERIAL_NUMBERS_DEFAULT,
+            serial_h_align: SliderConfig::SERIAL_H_ALIGN_DEFAULT,
+            serial_v_align: SliderConfig::SERIAL_V_ALIGN_DEFAULT,
+            serial_color: egui::Color32::WHITE,
+            serial_border: SliderConfig::SERIAL_BORDER_DEFAULT,
             blur_job_id: 0,
             blurred_rx: None,
         };
@@ -262,11 +286,19 @@ impl AppState {
         let gradient_dot = self.gradient_dot;
         let gradient_dot_size_pct = self.gradient_dot_size_pct;
         let (w, h) = self.save_size;
+        let bg = image::Rgb([self.bg_color.r(), self.bg_color.g(), self.bg_color.b()]);
+        let serial_numbers = self.serial_numbers;
+        let serial_h_align = self.serial_h_align;
+        let serial_v_align = self.serial_v_align;
+        let serial_color = image::Rgb([self.serial_color.r(), self.serial_color.g(), self.serial_color.b()]);
+        let serial_border = self.serial_border;
         
         self.high_res = self
             .tags
             .par_iter()
-            .map(|colors| {
+            .enumerate()
+            .map(|(i, colors)| {
+                let serial = if serial_numbers { Some((i + 1, serial_h_align, serial_v_align, serial_color, serial_border)) } else { None };
                 let img = draw_marker_polygon(
                     w,
                     h,
@@ -276,6 +308,8 @@ impl AppState {
                     center_dot_size_pct,
                     gradient_dot,
                     gradient_dot_size_pct,
+                    bg,
+                    serial,
                 );
                 DynamicImage::ImageRgb8(img)
             })
@@ -284,23 +318,30 @@ impl AppState {
     }
 
     pub fn rebuild_textures_quick(&mut self, ctx: &Context) {
-        // Draw small square previews directly at left tile size
+        // Draw previews at the user-chosen resolution, display at tile size
         let t0 = Instant::now();
         self.textures.clear();
-        let w = self.last_left_tile_w.round().max(2.0) as u32;
+        let w = self.preview_max_width.max(2);
         let h = w; // square preview
         let sides = self.sides;
         let center_dot = self.center_dot;
         let center_dot_size_pct = self.center_dot_size_pct;
         let gradient_dot = self.gradient_dot;
         let gradient_dot_size_pct = self.gradient_dot_size_pct;
+        let bg = image::Rgb([self.bg_color.r(), self.bg_color.g(), self.bg_color.b()]);
+        let serial_numbers = self.serial_numbers;
+        let serial_h_align = self.serial_h_align;
+        let serial_v_align = self.serial_v_align;
+        let serial_color = image::Rgb([self.serial_color.r(), self.serial_color.g(), self.serial_color.b()]);
+        let serial_border = self.serial_border;
         
         let imgs: Vec<_> = self
             .tags
             .par_iter()
             .enumerate()
             .map(|(i, colors)| {
-                let img = draw_marker_polygon(w, h, sides, colors, center_dot, center_dot_size_pct, gradient_dot, gradient_dot_size_pct);
+                let serial = if serial_numbers { Some((i + 1, serial_h_align, serial_v_align, serial_color, serial_border)) } else { None };
+                let img = draw_marker_polygon(w, h, sides, colors, center_dot, center_dot_size_pct, gradient_dot, gradient_dot_size_pct, bg, serial);
                 (i, DynamicImage::ImageRgb8(img).to_rgba8())
             })
             .collect();
@@ -308,13 +349,13 @@ impl AppState {
         for (i, rgba) in imgs.into_iter() {
             let size = [rgba.width() as usize, rgba.height() as usize];
             let color_image = ColorImage::from_rgba_unmultiplied(size, &rgba);
-            let tex = ctx.load_texture(format!("tag_preview_quick_{}", i), color_image, TextureOptions::NEAREST);
+            let tex = ctx.load_texture(format!("tag_preview_quick_{}", i), color_image, TextureOptions::LINEAR);
             self.textures.push(tex);
         }
         
         // Also refresh right-panel previews
         self.rebuild_right_textures_quick(ctx);
-        if self.profiling { println!("[profile] rebuild_textures_quick: {:.2} ms (left previews={}, tile={}x{})", t0.elapsed().as_secs_f64()*1000.0, self.textures.len(), w, h); }
+        if self.profiling { println!("[profile] rebuild_textures_quick: {:.2} ms (left previews={}, render={}x{})", t0.elapsed().as_secs_f64()*1000.0, self.textures.len(), w, h); }
     }
 
     pub fn rebuild_right_textures_quick(&mut self, ctx: &Context) {
@@ -327,8 +368,8 @@ impl AppState {
             return;
         }
 
-        // Use left tile width to size right-panel previews; cheaper and visually consistent
-        let base_w = self.last_left_tile_w.round().max(2.0) as u32;
+        // Use the user-chosen preview resolution as the base for right-panel previews
+        let base_w = self.preview_max_width.max(2);
         let half_w = (base_w / 2).max(2);
         let half_h = half_w;
         
@@ -339,13 +380,20 @@ impl AppState {
         let center_dot_size_pct = self.center_dot_size_pct;
         let gradient_dot = self.gradient_dot;
         let gradient_dot_size_pct = self.gradient_dot_size_pct;
+        let bg = image::Rgb([self.bg_color.r(), self.bg_color.g(), self.bg_color.b()]);
+        let serial_numbers = self.serial_numbers;
+        let serial_h_align = self.serial_h_align;
+        let serial_v_align = self.serial_v_align;
+        let serial_color = image::Rgb([self.serial_color.r(), self.serial_color.g(), self.serial_color.b()]);
+        let serial_border = self.serial_border;
         
         let mono_rgba: Vec<_> = self
             .tags
             .par_iter()
             .enumerate()
             .map(|(i, colors)| {
-                let rgb = draw_marker_polygon(half_w, half_h, sides, colors, center_dot, center_dot_size_pct, gradient_dot, gradient_dot_size_pct);
+                let serial = if serial_numbers { Some((i + 1, serial_h_align, serial_v_align, serial_color, serial_border)) } else { None };
+                let rgb = draw_marker_polygon(half_w, half_h, sides, colors, center_dot, center_dot_size_pct, gradient_dot, gradient_dot_size_pct, bg, serial);
                 (i, DynamicImage::ImageRgb8(rgb).grayscale().to_rgba8())
             })
             .collect();
@@ -368,7 +416,8 @@ impl AppState {
         for (k, s) in scales.iter().enumerate() {
             let w = ((base_w as f32) * s).round().max(2.0) as u32;
             let h = w;
-            let img = draw_marker_polygon(w, h, self.sides, first_colors, self.center_dot, self.center_dot_size_pct, self.gradient_dot, self.gradient_dot_size_pct);
+            let bg = image::Rgb([self.bg_color.r(), self.bg_color.g(), self.bg_color.b()]);
+            let img = draw_marker_polygon(w, h, self.sides, first_colors, self.center_dot, self.center_dot_size_pct, self.gradient_dot, self.gradient_dot_size_pct, bg, None);
             let rgba = DynamicImage::ImageRgb8(img).to_rgba8();
             let size = [rgba.width() as usize, rgba.height() as usize];
             let color_image = ColorImage::from_rgba_unmultiplied(size, &rgba);
@@ -381,7 +430,8 @@ impl AppState {
         let blur_dst_w = base_w.max(2);
         let blur_src_w: u32 = blur_dst_w.clamp(16, 128); // cap work size for speed
         let blur_src_h = blur_src_w;
-        let base_small = draw_marker_polygon(blur_src_w, blur_src_h, self.sides, first_colors, self.center_dot, self.center_dot_size_pct, self.gradient_dot, self.gradient_dot_size_pct);
+        let bg = image::Rgb([self.bg_color.r(), self.bg_color.g(), self.bg_color.b()]);
+        let base_small = draw_marker_polygon(blur_src_w, blur_src_h, self.sides, first_colors, self.center_dot, self.center_dot_size_pct, self.gradient_dot, self.gradient_dot_size_pct, bg, None);
         let base_small_dyn = DynamicImage::ImageRgb8(base_small);
         let blur_levels: [f32; 6] = [0.03, 0.06, 0.10, 0.16, 0.22, 0.30];
         
@@ -465,113 +515,177 @@ impl eframe::App for AppState {
         }
         
         // Top controls bar
-        egui::TopBottomPanel::top("controls_top").show(ctx, |ui| {
+        egui::TopBottomPanel::top("controls_top")
+            .frame(egui::Frame::side_top_panel(&ctx.style()).inner_margin(egui::Margin::symmetric(12.0, 8.0)))
+            .show(ctx, |ui| {
+            ui.spacing_mut().item_spacing = egui::Vec2::new(8.0, 6.0);
             ui.heading("Poly Cue tag generator");
-            // Row 1: Core controls
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Count:");
-                let mut count_i = self.count as i32;
-                let max_count = self.max_possible_count as i32;
-                if ui.add(egui::Slider::new(&mut count_i, SliderConfig::COUNT_MIN..=max_count)).changed() {
-                    let new_count = count_i as usize;
-                    if new_count != self.count {
-                        self.count = new_count;
-                        self.schedule_regen(RegenKind::Full, 200);
-                    }
-                }
-                ui.label(format!("(max: {})", self.max_possible_count));
-                ui.separator();
-                ui.label("Sides:");
-                let mut sides_i = self.sides as i32;
-                if ui.add(egui::Slider::new(&mut sides_i, SliderConfig::SIDES_MIN..=SliderConfig::SIDES_MAX)).changed() {
-                    let new_sides = sides_i as usize;
-                    if new_sides != self.sides {
-                        self.sides = new_sides;
-                        self.update_max_possible_count();
-                        // Clamp count to new maximum
-                        self.count = self.count.min(self.max_possible_count);
-                        self.schedule_regen(RegenKind::Full, 200);
-                    }
-                }
-                ui.separator();
-                ui.label(format!("ΔE threshold (auto): {:.1}", self.threshold));
-                if ui.button("Regenerate").clicked() {
-                    self.regenerate(ctx);
-                }
-                if ui.button("Save All Separate").clicked() {
-                    self.save_current_tags();
-                }
-                if ui.button("Save All Together").clicked() {
-                    self.save_current_tags_together();
-                }
-            });
+            ui.add_space(2.0);
 
-            // Row 2: Visual controls
-            ui.horizontal_wrapped(|ui| {
-                // Center dot toggle + size
-                let mut center_cb = self.center_dot;
-                if ui.checkbox(&mut center_cb, "center dot").changed() {
-                    self.center_dot = center_cb;
-                    self.schedule_regen(RegenKind::ImagesOnly, 50);
-                }
-                ui.add_enabled_ui(self.center_dot, |ui| {
-                    ui.label("Center dot size (%):");
-                    let mut sz = self.center_dot_size_pct;
-                    if ui.add(egui::Slider::new(&mut sz, SliderConfig::CENTER_DOT_MIN..=SliderConfig::CENTER_DOT_MAX).step_by(SliderConfig::CENTER_DOT_STEP)).changed() {
-                        self.center_dot_size_pct = sz;
-                        self.schedule_regen(RegenKind::ImagesOnly, 50);
-                    }
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                // LEFT: Tag options
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::new(8.0, 6.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.label("Tags:");
+                        let mut count_i = self.count as i32;
+                        let max_count = self.max_possible_count as i32;
+                        if ui.add(egui::Slider::new(&mut count_i, SliderConfig::COUNT_MIN..=max_count)).changed() {
+                            let new_count = count_i as usize;
+                            if new_count != self.count {
+                                self.count = new_count;
+                                self.schedule_regen(RegenKind::Full, 200);
+                            }
+                        }
+                        ui.label(format!("(max: {})", self.max_possible_count));
+                        ui.separator();
+                        ui.label("Sides:");
+                        let mut sides_i = self.sides as i32;
+                        if ui.add(egui::Slider::new(&mut sides_i, SliderConfig::SIDES_MIN..=SliderConfig::SIDES_MAX)).changed() {
+                            let new_sides = sides_i as usize;
+                            if new_sides != self.sides {
+                                self.sides = new_sides;
+                                self.update_max_possible_count();
+                                self.count = self.count.min(self.max_possible_count);
+                                self.schedule_regen(RegenKind::Full, 200);
+                            }
+                        }
+                    });
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        let mut center_cb = self.center_dot;
+                        if ui.checkbox(&mut center_cb, "center dot").changed() {
+                            self.center_dot = center_cb;
+                            self.schedule_regen(RegenKind::ImagesOnly, 50);
+                        }
+                        ui.add_enabled_ui(self.center_dot, |ui| {
+                            let mut sz = self.center_dot_size_pct;
+                            if ui.add(egui::Slider::new(&mut sz, SliderConfig::CENTER_DOT_MIN..=SliderConfig::CENTER_DOT_MAX).step_by(SliderConfig::CENTER_DOT_STEP).text("%")).changed() {
+                                self.center_dot_size_pct = sz;
+                                self.schedule_regen(RegenKind::ImagesOnly, 50);
+                            }
+                        });
+                        ui.separator();
+                        let mut gd = self.gradient_dot;
+                        if ui.checkbox(&mut gd, "gradient dot").changed() {
+                            self.gradient_dot = gd;
+                            self.schedule_regen(RegenKind::ImagesOnly, 50);
+                        }
+                        ui.add_enabled_ui(self.gradient_dot, |ui| {
+                            let mut gsz = self.gradient_dot_size_pct;
+                            if ui.add(egui::Slider::new(&mut gsz, SliderConfig::GRADIENT_DOT_MIN..=SliderConfig::GRADIENT_DOT_MAX).step_by(SliderConfig::GRADIENT_DOT_STEP).text("%")).changed() {
+                                self.gradient_dot_size_pct = gsz;
+                                self.schedule_regen(RegenKind::ImagesOnly, 50);
+                            }
+                        });
+                    });
                 });
 
                 ui.separator();
+                ui.add_space(20.0);
 
-                // Gradient dot toggle + size (independent)
-                let mut gd = self.gradient_dot;
-                if ui.checkbox(&mut gd, "gradient dot").changed() {
-                    self.gradient_dot = gd;
-                    self.schedule_regen(RegenKind::ImagesOnly, 50);
-                }
-                ui.add_enabled_ui(self.gradient_dot, |ui| {
-                    ui.label("Gradient dot size (%):");
-                    let mut gsz = self.gradient_dot_size_pct;
-                    if ui.add(egui::Slider::new(&mut gsz, SliderConfig::GRADIENT_DOT_MIN..=SliderConfig::GRADIENT_DOT_MAX).step_by(SliderConfig::GRADIENT_DOT_STEP)).changed() {
-                        self.gradient_dot_size_pct = gsz;
-                        self.schedule_regen(RegenKind::ImagesOnly, 50);
-                    }
+                // RIGHT: Actions & display options
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing = egui::Vec2::new(8.0, 6.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.label(format!("ΔE: {:.1}", self.threshold));
+                        if ui.button("Regenerate").clicked() {
+                            self.regenerate(ctx);
+                        }
+                        if ui.button("Save All Separate").clicked() {
+                            self.save_current_tags();
+                        }
+                        if ui.button("Save All Together").clicked() {
+                            self.save_current_tags_together();
+                        }
+                    });
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        ui.label("Preview res:");
+                        let mut pw = self.preview_max_width as f32;
+                        if ui.add(egui::Slider::new(&mut pw, SliderConfig::RESOLUTION_MIN..=SliderConfig::RESOLUTION_MAX).step_by(2.0)).changed() {
+                            self.preview_max_width = (pw.round() as u32) & !1;
+                            self.rebuild_textures_quick(ctx);
+                        }
+                        ui.separator();
+                        ui.label("Save res:");
+                        let mut save_res = self.save_size.0 as i32;
+                        if ui.add(egui::DragValue::new(&mut save_res).clamp_range(SliderConfig::SAVE_SIZE_MIN as i32..=SliderConfig::SAVE_SIZE_MAX as i32).speed(4)).changed() {
+                            let v = (save_res.max(SliderConfig::SAVE_SIZE_MIN as i32) as u32) & !1;
+                            self.save_size = (v, v);
+                        }
+                        ui.separator();
+                        ui.label("Background:");
+                        if egui::color_picker::color_edit_button_srgba(ui, &mut self.bg_color, egui::color_picker::Alpha::Opaque).changed() {
+                            self.rebuild_textures_quick(ctx);
+                        }
+                        ui.separator();
+                        let mut prof = self.profiling;
+                        if ui.checkbox(&mut prof, "profiling logs").changed() {
+                            self.profiling = prof;
+                            if self.profiling { println!("[profile] enabled"); } else { println!("[profile] disabled"); }
+                        }
+                        ui.separator();
+                        let mut defer = self.defer_high_res;
+                        if ui.checkbox(&mut defer, "defer high-res").on_hover_text("Skip rendering high-res images during interactive changes; still renders on Save").changed() {
+                            self.defer_high_res = defer;
+                        }
+                    });
+                    ui.add_space(2.0);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        let mut sn = self.serial_numbers;
+                        if ui.checkbox(&mut sn, "Serial numbers").changed() {
+                            self.serial_numbers = sn;
+                            self.rebuild_textures_quick(ctx);
+                        }
+                        if self.serial_numbers {
+                            ui.separator();
+                            if egui::color_picker::color_edit_button_srgba(ui, &mut self.serial_color, egui::color_picker::Alpha::Opaque).changed() {
+                                self.rebuild_textures_quick(ctx);
+                            }
+                            ui.separator();
+                            let mut sb = self.serial_border;
+                            if ui.checkbox(&mut sb, "border").changed() {
+                                self.serial_border = sb;
+                                self.rebuild_textures_quick(ctx);
+                            }
+                            ui.separator();
+                            ui.label("H pos:");
+                            let mut ha = self.serial_h_align;
+                            if ui.add(egui::Slider::new(&mut ha, 0.0f32..=1.0f32)).changed() {
+                                self.serial_h_align = ha;
+                                self.schedule_regen(RegenKind::ImagesOnly, 50);
+                            }
+                            ui.separator();
+                            ui.label("V pos:");
+                            let mut va = self.serial_v_align;
+                            if ui.add(egui::Slider::new(&mut va, 0.0f32..=1.0f32)).changed() {
+                                self.serial_v_align = va;
+                                self.schedule_regen(RegenKind::ImagesOnly, 50);
+                            }
+                        }
+                    });
                 });
-
-                ui.separator();
-                ui.label("Tag resolution:");
-                let mut pw = self.preview_max_width as f32;
-                if ui.add(egui::Slider::new(&mut pw, SliderConfig::RESOLUTION_MIN..=SliderConfig::RESOLUTION_MAX)).changed() {
-                    self.preview_max_width = pw.round() as u32;
-                    self.rebuild_textures_quick(ctx);
-                }
-            });
-
-            // Row 3: Layout controls
-            ui.horizontal_wrapped(|ui| {
-                ui.label("Columns:");
-                let mut cols_i = self.columns as i32;
-                if ui.add(egui::Slider::new(&mut cols_i, SliderConfig::COLUMNS_MIN..=SliderConfig::COLUMNS_MAX)).changed() {
-                    self.columns = cols_i as usize;
-                }
-                ui.separator();
-                let mut prof = self.profiling;
-                if ui.checkbox(&mut prof, "profiling logs").changed() {
-                    self.profiling = prof;
-                    if self.profiling { println!("[profile] enabled"); } else { println!("[profile] disabled"); }
-                }
-                ui.separator();
-                let mut defer = self.defer_high_res;
-                if ui.checkbox(&mut defer, "defer high-res").on_hover_text("Skip rendering high-res images during interactive changes; still renders on Save").changed() {
-                    self.defer_high_res = defer;
-                }
             });
         });
 
         // Left half: tags grid
         let panel_response = egui::SidePanel::left("tags_left").resizable(true).default_width(800.0).show(ctx, |ui| {
+            // Columns slider at the top of the grid area
+            ui.horizontal(|ui| {
+                ui.label("Columns:");
+                let mut cols_i = self.columns as i32;
+                if ui.add(egui::Slider::new(&mut cols_i, SliderConfig::COLUMNS_MIN..=SliderConfig::COLUMNS_MAX)).changed() {
+                    self.columns = cols_i as usize;
+                }
+            });
+            ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let cols = self.columns.max(1);
                 let avail = ui.available_width();
@@ -604,9 +718,11 @@ impl eframe::App for AppState {
         // Right half: placeholder for future graphics/content
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                let base_w = self.last_left_tile_w.max(32.0);
+
                 // Section: All tags monochrome half-size
                 ui.label("Monochrome (half-size)");
-                let mono_w = (self.last_left_tile_w * 0.5).max(2.0);
+                let mono_w = (base_w * 0.5).max(2.0);
                 ui.horizontal_wrapped(|ui| {
                     for tex in &self.right_mono_textures {
                         ui.add(egui::Image::new((tex.id(), egui::Vec2::new(mono_w, mono_w))));
@@ -622,7 +738,7 @@ impl eframe::App for AppState {
                 ];
                 ui.horizontal_wrapped(|ui| {
                     for (i, tex) in self.right_first_scaled_textures.iter().enumerate() {
-                        let w = (self.last_left_tile_w * scales[i]).max(2.0);
+                        let w = (base_w * scales[i]).max(2.0);
                         ui.add(egui::Image::new((tex.id(), egui::Vec2::new(w, w))));
                     }
                 });
@@ -630,7 +746,7 @@ impl eframe::App for AppState {
 
                 // Section: Heavily blurred first tag
                 ui.label("First tag blurred (levels)");
-                let w = self.last_left_tile_w.max(2.0);
+                let w = base_w;
                 ui.horizontal_wrapped(|ui| {
                     let time = ctx.input(|i| i.time) as f32;
                     for (i, ot) in self.right_blurred_textures.iter().enumerate() {

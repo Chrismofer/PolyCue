@@ -1,6 +1,6 @@
 # Poly Cue Tag Generator
 
-A Rust application for generating polygonal fiducial markers optimized for photogrammetry and computer vision applications.
+An application for generating polygonal fiducial markers that are optimized for photogrammetry and computer vision applications.
 
 <img width="1843" height="1152" alt="image" src="https://github.com/user-attachments/assets/b92fe3fb-e373-45c5-9336-43bd73fe1510" />
 
@@ -8,72 +8,95 @@ A Rust application for generating polygonal fiducial markers optimized for photo
 ## Features
 
 - **Optimized tags for Structure-from-Motion feature detectors**: tags that are differentiable, rotationally asymetrical, and include a diffuse gaussian dot as well as sharp edges, corners and junctions.
-- **Advanced Color Selection**: Uses CIE Lab color space and ΔE calculations to ensure maximum visual distinction between colors and calculates the maximum number of tags possible based on available distinct colors
-- **Optimized Color Grouping**: Monte Carlo optimization algorithm arranges colors for optimal contrast between adjacent segments
+- **Advanced Color Selection**: Uses CIE Lab ΔE to maximize perceptual distinctness between colors, limiting tag count to maintain minimum separation.
+- **Optimized Color Grouping**: Monte Carlo algorithm arranges colors for optimal contrast between adjacent segments
+- **Multiple Polygon Types**: Supports 3-6 sided markers (triangular, square, pentagonal, hexagonal)
+- **Central Dot**: Optional center dot + smooth gradient dot with adjustable sizes.
+- **High-Resolution Output**: Tags rendered as 1600×1600px PNG files, into a timestamped folder.
+- **Performance Optimized**: Parallel processing, async rendering, and efficient realtime regeneration and resizing
 
-- **High-Resolution Output**
-- **Multiple Polygon Types**: Support for 3-6 sided markers (triangular, square, pentagonal, hexagonal)
-- **Customizable Features**: Optional center dot and gradient dot with adjustable sizes
-- **Timestamped Output**: Automatically organizes generated files in dated subdirectories
-- **Performance Optimized**: Parallel processing, async rendering, and efficient regeneration for smooth interaction
-- **Responsive Interface**: Real-time regeneration when resizing panels for optimal viewing
 
 ## Use Cases
+- **3D Scanning**: Fiducial markers for photogrammetry and other 3D scanning applications.
+- **Robotics**: Landmarks for SLAM, stereo pipelines, SIFT/SURF specifically, etc.
+- **Augmented Reality**: Tracking markers for realtime AR applications
+- **Other Computer Vision Research**: Test patterns with corners, junctions, gradients, and unique color coding.
 
-- **3D Scanning**: Fiducial markers for photogrammetry and structured light scanning
-- **Robotics**: Visual landmarks for SLAM and navigation
-- **Augmented Reality**: Tracking markers for AR applications
-- **Computer Vision Research**: Standardized test patterns
+
+## How to Use
+
+### Left Controls — Tag Options
+
+| Control | Description |
+|---|---|
+| **Tags** slider | Number of unique markers to generate. Automatically capped at the maximum achievable with the current ΔE settings and side count. |
+| **Sides** slider | Number of polygon sides: 3 (triangle) → 6 (hexagon). More sides = more color segments per tag but fewer achievable tags at high ΔE. |
+| **center dot** checkbox + % slider | Adds a solid black dot at the centroid. Size is a percentage of the image width. |
+| **gradient dot** checkbox + % slider | Adds a soft Gaussian white halo over the center dot. Useful for detection algorithms that respond to radial gradients. |
+
+### Right Controls — Actions & Display
+
+| Control | Description |
+|---|---|
+| **ΔE display** | Shows the minimum perceptual color difference maintained across all tags. Higher = more distinct colors. Calculated automatically. |
+| **Regenerate** | Re-runs the color selection and grouping algorithm from scratch. Use when you want a fresh set of colors. |
+| **Save All Separate** | Renders all tags at the save resolution and writes individual PNG files to a timestamped `output/` subfolder, plus a `manifest.json`. |
+| **Save All Together** | Same as above but also writes a single combined grid image. |
+| **Preview res** slider | Resolution used to render the preview images in the left grid. Lower = faster interactive performance. Does not affect saved file quality. |
+| **Save res** drag | Pixel dimensions of the exported PNG files (width and height, always square). |
+| **Background** color picker | Sets the background color of all tags, previews, and saved files. |
+| **Serial numbers** checkbox | Overlays a sequence number on each tag. Color picker and border toggle appear when enabled. |
+| **H pos / V pos** sliders | Horizontal and vertical placement of serial numbers (0 = top-left, 1 = bottom-right). |
+| **defer high-res** checkbox | Skips the full-resolution render during interactive changes; only renders on Save. Speeds up sliders on slower machines. |
+| **profiling logs** checkbox | Prints timing output to the console for each render pass. |
+
+### Grid Area
+
+| Control | Description |
+|---|---|
+| **Columns** slider | Number of columns in the left tag grid. |
+| **Drag panel edge** | Resize the left panel. Previews automatically update to the new tile size. |
 
 
 ## Quick Start
 
-### Option 1: Download Pre-built Binary (Recommended)
-
-**Windows:**
+**Windows: Download Pre-built Binary**
 1. Go to [Releases](https://github.com/Chrismofer/PolyCue/releases)
 2. Download `polycue-windows-x64.zip`
 3. Extract and run `polycue-windows-x64.exe`
 
-**Linux:**
-1. Download `polycue-linux-x64.tar.gz`
-2. Extract: `tar -xzf polycue-linux-x64.tar.gz`
-3. Run: `./polycue-linux-x64`
 
-**macOS:**
-1. Download `polycue-macos-x64.tar.gz`
-2. Extract: `tar -xzf polycue-macos-x64.tar.gz`
-3. Run: `./polycue-macos-x64`
+**Prerequisites for building:** [Rust](https://rustup.rs/) (latest stable version)
 
-### Option 2: Build from Source
+**Windows users can use the build script:**
+> ```batch
+> # Double-click build-windows.bat or run in Command Prompt
+> build-windows.bat
 
-**Prerequisites:** [Rust](https://rustup.rs/) (latest stable version)
+**Linux: *No pre-built Linux binary is currently available.* Build from source instead:**
+> ```bash
+> sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+> git clone https://github.com/Chrismofer/PolyCue.git && cd PolyCue
+> cargo run --release
+> ```
 
-```bash
-# Clone the repository
-git clone https://github.com/Chrismofer/PolyCue.git
-cd PolyCue
+**macOS: *No pre-built macOS binary is currently available.* Build from source instead:**
+> ```bash
+> git clone https://github.com/Chrismofer/PolyCue.git && cd PolyCue
+> cargo run --release
+> ```
 
-# Run the application
-cargo run --release
-```
-
-**Windows users can also use the build script:**
-```batch
-# Double-click build-windows.bat or run in Command Prompt
-build-windows.bat
-```
 
 The GUI will open, allowing you to:
 1. Adjust the number of markers (dynamically limited based on available colors)
-2. Change polygon sides (3-6)
+2. Change polygon side count (3-6)
 3. Toggle center/gradient dots with size controls
 4. Adjust preview resolution and grid layout
-5. Use the Regenerate button to manually refresh
-6. Save markers separately or together in a combined grid image
-7. Enable profiling logs for performance monitoring
-8. Toggle defer high-res for better interactive performance
-9. Resize panels for optimal viewing (auto-regenerates previews)
+5. Use the Regenerate button to re-select colors
+6. Save markers separately or together in a single combined image
+7. Toggle defer high-res for better interactive performance
+8. Resize panels for optimal viewing (auto-regenerates previews)
+9. Enable profiling logs for performance monitoring
 
 ### Output
 
@@ -87,8 +110,8 @@ Generated files are saved to timestamped subdirectories in the `output/` directo
 
 ### Color Selection Algorithm
 
-1. **Candidate Generation**: Creates a grid of 216 perceptually-spaced sRGB colors
-2. **Lightness Filtering**: Removes colors that are too dark (L* < 20) or too bright (L* > 90)
+1. **Candidate Generation**: Creates a grid of 216 perceptually-spaced sRGB colors to pick from (to establish a minimum difference between any two colors)
+2. **Lightness Filtering**: Removes colors that are too dark (L* < 20) or too bright (L* > 90) as those lack differentiable color information.
 3. **Threshold Optimization**: Binary search to find the maximum ΔE threshold that provides enough distinct colors
 4. **Greedy Selection**: Picks colors that meet the minimum separation requirement
 5. **Dynamic Limits**: Automatically calculates and displays the maximum possible tags for current settings

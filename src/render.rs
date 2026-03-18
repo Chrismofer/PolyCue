@@ -2,6 +2,7 @@ use image::{ImageBuffer, Rgb};
 use crate::color::{pairwise_delta_matrix, group_min};
 use palette::Lab;
 use rand::{thread_rng, Rng};
+use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Point {
@@ -150,6 +151,102 @@ pub fn draw_filled_triangle(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, a: Point, b
     }
 }
 
+static FONT_DATA: &[u8] = include_bytes!("../assets/font.ttf");
+
+/// Render a serial number onto an image using a TTF font.
+/// h_align / v_align are 0.0 (top-left) → 1.0 (bottom-right).
+fn draw_serial_number(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    number: usize,
+    h_align: f32,
+    v_align: f32,
+    color: Rgb<u8>,
+    border: bool,
+) {
+    let font = FontRef::try_from_slice(FONT_DATA).expect("Invalid font.ttf");
+    let text = number.to_string();
+
+    let iw = img.width() as f32;
+    let ih = img.height() as f32;
+
+    // Font height ≈ 13% of the shorter image dimension
+    let font_size = (iw.min(ih) * 0.13).max(6.0);
+    let scale = PxScale::from(font_size);
+    let sf = font.as_scaled(scale);
+
+    // Measure total text advance width
+    let mut total_w = 0.0f32;
+    let mut prev_id = None;
+    for ch in text.chars() {
+        let gid = font.glyph_id(ch);
+        if let Some(p) = prev_id { total_w += sf.kern(p, gid); }
+        total_w += sf.h_advance(gid);
+        prev_id = Some(gid);
+    }
+
+    let text_h = sf.ascent() - sf.descent();
+    let x0 = (h_align * (iw - total_w).max(0.0)) as i32;
+    let baseline_y = (v_align * (ih - text_h).max(0.0) + sf.ascent()) as i32;
+
+    // Collect glyphs with their pixel positions
+    let mut cursor_x = x0 as f32;
+    let mut prev_id = None;
+    let mut glyphs = Vec::new();
+    for ch in text.chars() {
+        let gid = font.glyph_id(ch);
+        if let Some(p) = prev_id { cursor_x += sf.kern(p, gid); }
+        let g = gid.with_scale_and_position(scale, ab_glyph::point(cursor_x, baseline_y as f32));
+        if let Some(og) = font.outline_glyph(g) { glyphs.push(og); }
+        cursor_x += sf.h_advance(gid);
+        prev_id = Some(gid);
+    }
+
+    let img_w = img.width() as i32;
+    let img_h = img.height() as i32;
+
+    // Outline pass: black, smeared 2px in all directions for a thicker border
+    if border {
+        for og in &glyphs {
+            let b = og.px_bounds();
+            for dy in -2i32..=2 {
+                for dx in -2i32..=2 {
+                    if dx == 0 && dy == 0 { continue; }
+                    og.draw(|rx, ry, cov| {
+                        if cov > 0.05 {
+                            let px = b.min.x as i32 + rx as i32 + dx;
+                            let py = b.min.y as i32 + ry as i32 + dy;
+                            if px >= 0 && px < img_w && py >= 0 && py < img_h {
+                                let p = img.get_pixel_mut(px as u32, py as u32);
+                                p[0] = (p[0] as f32 * (1.0 - cov)) as u8;
+                                p[1] = (p[1] as f32 * (1.0 - cov)) as u8;
+                                p[2] = (p[2] as f32 * (1.0 - cov)) as u8;
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    }
+
+    // Color fill pass
+    let (cr, cg, cb) = (color[0] as f32, color[1] as f32, color[2] as f32);
+    for og in &glyphs {
+        let b = og.px_bounds();
+        og.draw(|rx, ry, cov| {
+            if cov > 0.05 {
+                let px = b.min.x as i32 + rx as i32;
+                let py = b.min.y as i32 + ry as i32;
+                if px >= 0 && px < img_w && py >= 0 && py < img_h {
+                    let p = img.get_pixel_mut(px as u32, py as u32);
+                    p[0] = (p[0] as f32 * (1.0 - cov) + cr * cov) as u8;
+                    p[1] = (p[1] as f32 * (1.0 - cov) + cg * cov) as u8;
+                    p[2] = (p[2] as f32 * (1.0 - cov) + cb * cov) as u8;
+                }
+            }
+        });
+    }
+}
+
 /// Draw a polygonal marker with optional center and gradient dots
 #[allow(clippy::too_many_arguments)]
 pub fn draw_marker_polygon(
@@ -160,9 +257,11 @@ pub fn draw_marker_polygon(
     center_dot: bool, 
     center_dot_size_pct: f32, 
     gradient_dot: bool, 
-    gradient_dot_size_pct: f32
+    gradient_dot_size_pct: f32,
+    bg: Rgb<u8>,
+    serial_number: Option<(usize, f32, f32, Rgb<u8>, bool)>, // (1-based index, h_align, v_align, color, border)
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
-    let mut img = ImageBuffer::from_pixel(width, height, Rgb([255, 255, 255]));
+    let mut img = ImageBuffer::from_pixel(width, height, bg);
 
     let w = width as f32;
     let h_img = height as f32;
@@ -196,7 +295,7 @@ pub fn draw_marker_polygon(
 
     // Optional center dot (solid black circle)
     if center_dot {
-        let pct = (center_dot_size_pct / 100.0).clamp(0.01, 0.5);
+        let pct = (center_dot_size_pct / 100.0).clamp(0.01, 1.0);
         let r = ((w.min(h_img)) * pct * 0.5).max(1.0);
         let r2 = r * r;
         let x0 = ((cx - r).floor() as i32).max(0);
@@ -217,7 +316,7 @@ pub fn draw_marker_polygon(
     
     // Optional gradient dot (Gaussian fade to white)
     if gradient_dot {
-        let pct_g = (gradient_dot_size_pct / 100.0).clamp(0.01, 0.5);
+        let pct_g = (gradient_dot_size_pct / 100.0).clamp(0.01, 1.0);
         let rg = ((w.min(h_img)) * pct_g * 0.5).max(1.0);
         let rg2 = rg * rg;
         let x0 = ((cx - rg).floor() as i32).max(0);
@@ -246,6 +345,10 @@ pub fn draw_marker_polygon(
                 }
             }
         }
+    }
+
+    if let Some((number, h_align, v_align, color, border)) = serial_number {
+        draw_serial_number(&mut img, number, h_align, v_align, color, border);
     }
 
     img

@@ -23,10 +23,14 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact_name: polycue
             asset_name: polycue-linux-x64
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
             artifact_name: polycue
             asset_name: polycue-macos-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: polycue
+            asset_name: polycue-macos-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -35,30 +39,27 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: ${{ matrix.target }}
-        override: true
-        profile: minimal
+        targets: ${{ matrix.target }}
 
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/registry
         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache cargo index
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Cache target directory
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Install Linux dependencies
       if: matrix.os == 'ubuntu-latest'
@@ -107,7 +108,7 @@ jobs:
         tar -czf ${{ matrix.asset_name }}.tar.gz -C package .
 
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.asset_name }}
         path: |
@@ -125,10 +126,10 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Create release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           **/polycue-*
@@ -149,10 +150,15 @@ jobs:
           2. Extract: `tar -xzf polycue-linux-x64.tar.gz`
           3. Run: `./polycue-linux-x64`
           
-          **macOS:**
+          **macOS (Intel):**
           1. Download `polycue-macos-x64.tar.gz`
           2. Extract: `tar -xzf polycue-macos-x64.tar.gz`
           3. Run: `./polycue-macos-x64`
+          
+          **macOS (Apple Silicon):**
+          1. Download `polycue-macos-arm64.tar.gz`
+          2. Extract: `tar -xzf polycue-macos-arm64.tar.gz`
+          3. Run: `./polycue-macos-arm64`
           
           ### Changes
           
