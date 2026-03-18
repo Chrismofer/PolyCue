@@ -1,8 +1,12 @@
-# Poly Cue Tag Generator
+# Poly Cue Tag Generator v0.2
 
 An application for generating polygonal fiducial markers that are optimized for photogrammetry and computer vision applications.
 
+
 <img width="1843" height="1152" alt="image" src="https://github.com/user-attachments/assets/b92fe3fb-e373-45c5-9336-43bd73fe1510" />
+
+v0.2 has added features including backgroudn color control, output resolution, a numbering scheme, etc:
+<img width="1259" height="1031" alt="image" src="https://github.com/user-attachments/assets/7d0831b1-2d47-4a6c-b971-e7e253343c6e" />
 
 
 ## Features
